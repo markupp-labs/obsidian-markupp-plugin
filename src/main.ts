@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, MarkuppSettings, MarkuppSettingTab } from "./settings
 import { downloadActiveNote } from "./commands/download";
 import { importFromServer } from "./commands/import";
 import { syncActiveNote } from "./commands/sync";
+import { syncAllNotes } from "./commands/sync-all";
 import { uploadActiveNote } from "./commands/upload";
 import { getNoteMeta, removeNoteMeta, renameNote } from "./storage/note-index";
 
@@ -16,6 +17,7 @@ export default class MarkuppPlugin extends Plugin {
 		const upload = () => uploadActiveNote(this, this.settings);
 		const download = () => downloadActiveNote(this, this.settings);
 		const importAll = () => importFromServer(this, this.settings);
+		const syncAll = () => syncAllNotes(this, this.settings);
 
 		this.addRibbonIcon("arrow-big-up-dash", "Markupp", (evt) => {
 			const menu = new Menu();
@@ -34,6 +36,12 @@ export default class MarkuppPlugin extends Plugin {
 					.setTitle("Importar do servidor")
 					.setIcon("download-cloud")
 					.onClick(importAll),
+			);
+			menu.addItem((item) =>
+				item
+					.setTitle("Sincronizar tudo")
+					.setIcon("refresh-ccw")
+					.onClick(syncAll),
 			);
 			menu.showAtMouseEvent(evt);
 		});
@@ -57,6 +65,11 @@ export default class MarkuppPlugin extends Plugin {
 			id: "markupp-import",
 			name: "Markupp: Importar do servidor",
 			callback: importAll,
+		});
+		this.addCommand({
+			id: "markupp-sync-all",
+			name: "Markupp: Sincronizar tudo",
+			callback: syncAll,
 		});
 
 		this.addSettingTab(new MarkuppSettingTab(this.app, this));

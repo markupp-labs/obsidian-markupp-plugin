@@ -1,12 +1,67 @@
-import { MarkdownView, Notice, Plugin } from "obsidian";
-import { getNote, MarkuppApiError, updateNote } from "../api/client";
-import { MarkuppSettings } from "../settings";
+import { MarkdownView, Notice, Plugin, TFile } from "obsidian";
+import {
+	getNote,
+	MarkuppApiError,
+	NoteResponse,
+	updateNote,
+} from "../api/client";
+import { MarkuppSettings, NoteMeta } from "../settings";
 import {
 	getNoteMeta,
 	removeNoteMeta,
 	setNoteMeta,
 } from "../storage/note-index";
 import { uploadActiveNote } from "./upload";
+
+export type SyncResult = "noop" | "pulled" | "pushed" | "conflict";
+
+export type SyncOptions = {
+	serverNote?: NoteResponse;
+};
+
+export async function syncOneFile(
+	plugin: Plugin,
+	settings: MarkuppSettings,
+	file: TFile,
+	meta: NoteMeta,
+	options: SyncOptions = {},
+): Promise<SyncResult> {
+	const path = file.path;
+	const serverNote =
+		options.serverNote ?? (await getNote(settings.backendUrl, meta.id));
+
+	const serverChanged = serverNote.updated_at !== meta.serverUpdatedAt;
+	const localChanged = file.stat.mtime !== meta.localMtimeAtSync;
+
+	if (!serverChanged && !localChanged) {
+		return "noop";
+	}
+
+	if (serverChanged && !localChanged) {
+		await plugin.app.vault.modify(file, serverNote.content);
+		setNoteMeta(settings, path, {
+			id: serverNote.id,
+			serverUpdatedAt: serverNote.updated_at,
+			localMtimeAtSync: file.stat.mtime,
+		});
+		await plugin.saveData(settings);
+		return "pulled";
+	}
+
+	if (!serverChanged && localChanged) {
+		const content = await plugin.app.vault.read(file);
+		const note = await updateNote(settings.backendUrl, meta.id, path, content);
+		setNoteMeta(settings, path, {
+			id: note.id,
+			serverUpdatedAt: note.updated_at,
+			localMtimeAtSync: file.stat.mtime,
+		});
+		await plugin.saveData(settings);
+		return "pushed";
+	}
+
+	return "conflict";
+}
 
 export async function syncActiveNote(
 	plugin: Plugin,
@@ -27,49 +82,8 @@ export async function syncActiveNote(
 	}
 
 	try {
-		const serverNote = await getNote(settings.backendUrl, meta.id);
-
-		const serverChanged = serverNote.updated_at !== meta.serverUpdatedAt;
-		const localChanged = file.stat.mtime !== meta.localMtimeAtSync;
-
-		if (!serverChanged && !localChanged) {
-			new Notice("Já sincronizado.");
-			return;
-		}
-
-		if (serverChanged && !localChanged) {
-			await plugin.app.vault.modify(file, serverNote.content);
-			setNoteMeta(settings, path, {
-				id: serverNote.id,
-				serverUpdatedAt: serverNote.updated_at,
-				localMtimeAtSync: file.stat.mtime,
-			});
-			await plugin.saveData(settings);
-			new Notice(`Atualização do servidor baixada: ${path}`);
-			return;
-		}
-
-		if (!serverChanged && localChanged) {
-			const content = await plugin.app.vault.read(file);
-			const note = await updateNote(
-				settings.backendUrl,
-				meta.id,
-				path,
-				content,
-			);
-			setNoteMeta(settings, path, {
-				id: note.id,
-				serverUpdatedAt: note.updated_at,
-				localMtimeAtSync: file.stat.mtime,
-			});
-			await plugin.saveData(settings);
-			new Notice(`Alterações locais enviadas: ${path}`);
-			return;
-		}
-
-		new Notice(
-			"Conflito: nota mudou nos dois lados desde a última sync. Use 'Subir' ou 'Baixar' para escolher.",
-		);
+		const result = await syncOneFile(plugin, settings, file, meta);
+		new Notice(messageFor(result, path));
 	} catch (err) {
 		if (
 			err instanceof MarkuppApiError &&
@@ -79,6 +93,19 @@ export async function syncActiveNote(
 			await plugin.saveData(settings);
 		}
 		new Notice(buildErrorMessage(err, settings.backendUrl));
+	}
+}
+
+function messageFor(result: SyncResult, path: string): string {
+	switch (result) {
+		case "noop":
+			return "Já sincronizado.";
+		case "pulled":
+			return `Atualização do servidor baixada: ${path}`;
+		case "pushed":
+			return `Alterações locais enviadas: ${path}`;
+		case "conflict":
+			return "Conflito: nota mudou nos dois lados desde a última sync. Use 'Subir' ou 'Baixar' para escolher.";
 	}
 }
 
