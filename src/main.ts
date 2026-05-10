@@ -1,6 +1,7 @@
-import { Plugin } from "obsidian";
+import { Plugin, TAbstractFile } from "obsidian";
 import { DEFAULT_SETTINGS, MarkuppSettings, MarkuppSettingTab } from "./settings";
 import { uploadActiveNote } from "./commands/upload-active-note";
+import { getNoteMeta, removeNoteMeta, renameNote } from "./storage/note-index";
 
 export default class MarkuppPlugin extends Plugin {
 	settings!: MarkuppSettings;
@@ -20,6 +21,21 @@ export default class MarkuppPlugin extends Plugin {
 
 		this.addSettingTab(new MarkuppSettingTab(this.app, this));
 
+		this.registerEvent(
+			this.app.vault.on("rename", async (file: TAbstractFile, oldPath: string) => {
+				if (!getNoteMeta(this.settings, oldPath)) return;
+				renameNote(this.settings, oldPath, file.path);
+				await this.saveSettings();
+			}),
+		);
+
+		this.registerEvent(
+			this.app.vault.on("delete", async (file: TAbstractFile) => {
+				if (!getNoteMeta(this.settings, file.path)) return;
+				removeNoteMeta(this.settings, file.path);
+				await this.saveSettings();
+			}),
+		);
 	}
 
 	onunload() {}
