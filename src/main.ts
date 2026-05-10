@@ -1,6 +1,6 @@
 import { Plugin, TAbstractFile } from "obsidian";
 import { DEFAULT_SETTINGS, MarkuppSettings, MarkuppSettingTab } from "./settings";
-import { uploadActiveNote } from "./commands/upload-active-note";
+import { uploadActiveNote } from "./commands/upload";
 import { getNoteMeta, removeNoteMeta, renameNote } from "./storage/note-index";
 
 export default class MarkuppPlugin extends Plugin {
