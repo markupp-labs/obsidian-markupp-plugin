@@ -1,6 +1,7 @@
 import { Menu, Plugin, TAbstractFile } from "obsidian";
 import { DEFAULT_SETTINGS, MarkuppSettings, MarkuppSettingTab } from "./settings";
 import { downloadActiveNote } from "./commands/download";
+import { importFromServer } from "./commands/import";
 import { syncActiveNote } from "./commands/sync";
 import { uploadActiveNote } from "./commands/upload";
 import { getNoteMeta, removeNoteMeta, renameNote } from "./storage/note-index";
@@ -14,6 +15,7 @@ export default class MarkuppPlugin extends Plugin {
 		const sync = () => syncActiveNote(this, this.settings);
 		const upload = () => uploadActiveNote(this, this.settings);
 		const download = () => downloadActiveNote(this, this.settings);
+		const importAll = () => importFromServer(this, this.settings);
 
 		this.addRibbonIcon("arrow-big-up-dash", "Markupp", (evt) => {
 			const menu = new Menu();
@@ -25,6 +27,13 @@ export default class MarkuppPlugin extends Plugin {
 			);
 			menu.addItem((item) =>
 				item.setTitle("Baixar").setIcon("download").onClick(download),
+			);
+			menu.addSeparator();
+			menu.addItem((item) =>
+				item
+					.setTitle("Importar do servidor")
+					.setIcon("download-cloud")
+					.onClick(importAll),
 			);
 			menu.showAtMouseEvent(evt);
 		});
@@ -43,6 +52,11 @@ export default class MarkuppPlugin extends Plugin {
 			id: "markupp-download",
 			name: "Markupp: Baixar nota ativa",
 			callback: download,
+		});
+		this.addCommand({
+			id: "markupp-import",
+			name: "Markupp: Importar do servidor",
+			callback: importAll,
 		});
 
 		this.addSettingTab(new MarkuppSettingTab(this.app, this));

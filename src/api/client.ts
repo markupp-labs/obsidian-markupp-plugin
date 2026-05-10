@@ -86,3 +86,16 @@ export async function getNote(
 	}
 	throw toApiError(res);
 }
+
+export async function listNotes(backendUrl: string): Promise<NoteResponse[]> {
+	const res = await requestUrl({
+		url: notesUrl(backendUrl),
+		method: "GET",
+		throw: false,
+	});
+
+	if (res.status === 200) {
+		return res.json as NoteResponse[];
+	}
+	throw toApiError(res);
+}
