@@ -1,5 +1,7 @@
-import { Plugin, TAbstractFile } from "obsidian";
+import { Menu, Plugin, TAbstractFile } from "obsidian";
 import { DEFAULT_SETTINGS, MarkuppSettings, MarkuppSettingTab } from "./settings";
+import { downloadActiveNote } from "./commands/download";
+import { syncActiveNote } from "./commands/sync";
 import { uploadActiveNote } from "./commands/upload";
 import { getNoteMeta, removeNoteMeta, renameNote } from "./storage/note-index";
 
@@ -9,14 +11,38 @@ export default class MarkuppPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		const sync = () => syncActiveNote(this, this.settings);
 		const upload = () => uploadActiveNote(this, this.settings);
+		const download = () => downloadActiveNote(this, this.settings);
 
-		this.addRibbonIcon("arrow-big-up-dash", "Subir nota ativa", upload);
+		this.addRibbonIcon("arrow-big-up-dash", "Markupp", (evt) => {
+			const menu = new Menu();
+			menu.addItem((item) =>
+				item.setTitle("Sincronizar").setIcon("refresh-cw").onClick(sync),
+			);
+			menu.addItem((item) =>
+				item.setTitle("Subir").setIcon("upload").onClick(upload),
+			);
+			menu.addItem((item) =>
+				item.setTitle("Baixar").setIcon("download").onClick(download),
+			);
+			menu.showAtMouseEvent(evt);
+		});
 
 		this.addCommand({
-			id: "upload-active-note",
-			name: "Subir nota ativa",
+			id: "markupp-sync",
+			name: "Markupp: Sincronizar nota ativa",
+			callback: sync,
+		});
+		this.addCommand({
+			id: "markupp-upload",
+			name: "Markupp: Subir nota ativa",
 			callback: upload,
+		});
+		this.addCommand({
+			id: "markupp-download",
+			name: "Markupp: Baixar nota ativa",
+			callback: download,
 		});
 
 		this.addSettingTab(new MarkuppSettingTab(this.app, this));
