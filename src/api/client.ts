@@ -19,14 +19,26 @@ export class MarkuppApiError extends Error {
 	}
 }
 
+function notesUrl(backendUrl: string, suffix = ""): string {
+	return backendUrl.replace(/\/+$/, "") + "/notes" + suffix;
+}
+
+function toApiError(res: { status: number; json: unknown }): MarkuppApiError {
+	const body = res.json as { error?: string; message?: string } | undefined;
+	return new MarkuppApiError(
+		body?.error ?? "unknown",
+		body?.message ?? "Erro desconhecido",
+		res.status,
+	);
+}
+
 export async function createNote(
 	backendUrl: string,
 	path: string,
 	content: string,
 ): Promise<NoteResponse> {
-	const url = backendUrl.replace(/\/+$/, "") + "/notes";
 	const res = await requestUrl({
-		url,
+		url: notesUrl(backendUrl),
 		method: "POST",
 		contentType: "application/json",
 		body: JSON.stringify({ path, content }),
@@ -36,11 +48,41 @@ export async function createNote(
 	if (res.status === 201) {
 		return res.json as NoteResponse;
 	}
+	throw toApiError(res);
+}
 
-	const body = res.json as { error?: string; message?: string } | undefined;
-	throw new MarkuppApiError(
-		body?.error ?? "unknown",
-		body?.message ?? "Erro desconhecido",
-		res.status,
-	);
+export async function updateNote(
+	backendUrl: string,
+	id: string,
+	path: string,
+	content: string,
+): Promise<NoteResponse> {
+	const res = await requestUrl({
+		url: notesUrl(backendUrl, "/" + encodeURIComponent(id)),
+		method: "PUT",
+		contentType: "application/json",
+		body: JSON.stringify({ path, content }),
+		throw: false,
+	});
+
+	if (res.status === 200) {
+		return res.json as NoteResponse;
+	}
+	throw toApiError(res);
+}
+
+export async function getNote(
+	backendUrl: string,
+	id: string,
+): Promise<NoteResponse> {
+	const res = await requestUrl({
+		url: notesUrl(backendUrl, "/" + encodeURIComponent(id)),
+		method: "GET",
+		throw: false,
+	});
+
+	if (res.status === 200) {
+		return res.json as NoteResponse;
+	}
+	throw toApiError(res);
 }
