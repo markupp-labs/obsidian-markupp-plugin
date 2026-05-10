@@ -17,7 +17,26 @@ export class Notice {
 export class Plugin {}
 export class MarkdownView {}
 export class PluginSettingTab {}
-export class TAbstractFile {}
+
+export class TAbstractFile {
+	path: string = "";
+}
+
+export class TFile extends TAbstractFile {
+	stat: { mtime: number };
+	constructor(path: string = "", mtime: number = 0) {
+		super();
+		this.path = path;
+		this.stat = { mtime };
+	}
+}
+
+export class TFolder extends TAbstractFile {
+	constructor(path: string = "") {
+		super();
+		this.path = path;
+	}
+}
 
 export class Setting {
 	setName() {
@@ -33,6 +52,9 @@ export class Setting {
 
 export class Menu {
 	addItem() {
+		return this;
+	}
+	addSeparator() {
 		return this;
 	}
 	showAtMouseEvent() {

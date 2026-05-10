@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { requestUrl } from "obsidian";
-import { createNote, getNote, MarkuppApiError, updateNote } from "./client";
+import {
+	createNote,
+	getNote,
+	listNotes,
+	MarkuppApiError,
+	updateNote,
+} from "./client";
 
 vi.mock("obsidian", () => import("../__mocks__/obsidian"));
 
@@ -174,6 +180,61 @@ describe("getNote", () => {
 		).rejects.toMatchObject({
 			code: "not_found",
 			status: 404,
+		});
+	});
+});
+
+describe("listNotes", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("retorna NoteResponse[] quando status 200", async () => {
+		const list = [
+			noteResponse,
+			{ ...noteResponse, id: "abc-2", path: "outra.md" },
+		];
+		mockRequestUrl.mockResolvedValue({ status: 200, json: list });
+
+		const result = await listNotes("http://localhost:8080");
+
+		expect(result).toEqual(list);
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes",
+			method: "GET",
+			throw: false,
+		});
+	});
+
+	test("normaliza barras finais da backendUrl", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: [] });
+
+		await listNotes("http://localhost:8080///");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes" }),
+		);
+	});
+
+	test("lista vazia retorna array vazio", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: [] });
+
+		const result = await listNotes("http://localhost:8080");
+
+		expect(result).toEqual([]);
+	});
+
+	test("lança MarkuppApiError quando servidor retorna erro", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 500,
+			json: { error: "internal", message: "erro interno" },
+		});
+
+		await expect(
+			listNotes("http://localhost:8080"),
+		).rejects.toMatchObject({
+			code: "internal",
+			status: 500,
 		});
 	});
 });
