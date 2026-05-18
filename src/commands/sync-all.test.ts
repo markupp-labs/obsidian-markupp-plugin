@@ -56,7 +56,7 @@ describe("syncAllNotes", () => {
 		expect(listNotes).not.toHaveBeenCalled();
 		expect(syncOneFile).not.toHaveBeenCalled();
 		expect(noticeCalls).toContainEqual(
-			expect.stringContaining("Importar do servidor"),
+			expect.stringContaining("Importe do servidor"),
 		);
 	});
 
