@@ -22,7 +22,7 @@ export async function downloadActiveNote(
 	const meta = getNoteMeta(settings, path);
 
 	if (!meta) {
-		new Notice("Nota nunca sincronizada — use Subir primeiro.");
+		new Notice("Nota nunca sincronizada — envie ela primeiro.");
 		return;
 	}
 

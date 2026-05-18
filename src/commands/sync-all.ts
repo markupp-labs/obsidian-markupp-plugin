@@ -15,7 +15,7 @@ export async function syncAllNotes(
 	const paths = Object.keys(settings.notes);
 	if (paths.length === 0) {
 		new Notice(
-			"Nenhuma nota sincronizada localmente. Use 'Importar do servidor' para começar.",
+			"Nenhuma nota sincronizada localmente. Importe do servidor para começar.",
 		);
 		return;
 	}
