@@ -41,7 +41,8 @@ export async function importFromServer(
 				localMtimeAtSync: file.stat.mtime,
 			});
 			importadas++;
-		} catch {
+		} catch (err) {
+			console.error(`Falha ao importar ${nota.path}:`, err);
 			erros++;
 		}
 	}
