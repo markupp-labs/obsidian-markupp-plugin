@@ -48,27 +48,27 @@ export default class MarkuppPlugin extends Plugin {
 
 		this.addCommand({
 			id: "markupp-sync",
-			name: "Markupp: Sincronizar nota ativa",
+			name: "Sincronizar nota ativa",
 			callback: sync,
 		});
 		this.addCommand({
 			id: "markupp-upload",
-			name: "Markupp: Subir nota ativa",
+			name: "Subir nota ativa",
 			callback: upload,
 		});
 		this.addCommand({
 			id: "markupp-download",
-			name: "Markupp: Baixar nota ativa",
+			name: "Baixar nota ativa",
 			callback: download,
 		});
 		this.addCommand({
 			id: "markupp-import",
-			name: "Markupp: Importar do servidor",
+			name: "Importar do servidor",
 			callback: importAll,
 		});
 		this.addCommand({
 			id: "markupp-sync-all",
-			name: "Markupp: Sincronizar tudo",
+			name: "Sincronizar tudo",
 			callback: syncAll,
 		});
 
