@@ -33,7 +33,7 @@ describe("createNote", () => {
 		});
 	});
 
-	test("normaliza barras finais da backendUrl", async () => {
+	test("normaliza barras finais da serverUrl", async () => {
 		mockRequestUrl.mockResolvedValue({ status: 201, json: {} });
 
 		await createNote("http://localhost:8080///", "foo.md", "x");

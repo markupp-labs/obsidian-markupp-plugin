@@ -1,20 +1,20 @@
 # Markupp Plugin (Obsidian)
 
-Plugin Obsidian do projeto [Markupp](../README.md). Permite enviar a nota ativa do vault para o backend Markupp, que armazena e versiona o conteúdo de forma centralizada.
+Plugin Obsidian do projeto [Markupp](../README.md). Permite enviar a nota ativa do vault para o servidor Markupp, que armazena e versiona o conteúdo de forma centralizada.
 
 ## Pré-requisitos
 
 - Node.js 20+
-- Backend Markupp rodando localmente (ver [`../backend`](../backend) ou `docker compose up` na raiz do monorepo)
+- Servidor Markupp rodando localmente (ver [`../markupp`](../markupp) ou `docker compose up` na raiz do monorepo)
 
 ## Funcionalidades
 
 - Comando "Subir nota ativa" e ícone na ribbon que enviam a nota Markdown atual via `POST /notes`
-- Tela de configuração (Settings → Markupp Plugin) para definir a URL do backend
+- Tela de configuração (Settings → Markupp Plugin) para definir a URL do servidor
 
 ## Configuração
 
-Após instalar, abra **Settings → Markupp Plugin** e ajuste a **Backend URL** (default: `http://localhost:8080`).
+Após instalar, abra **Settings → Markupp Plugin** e ajuste a **URL do servidor** (default: `http://localhost:8080`).
 
 ## Desenvolvimento
 
@@ -41,7 +41,7 @@ Para testar no Obsidian, faça symlink/copie a pasta deste plugin para `<seu-vau
 ```
 src/
 ├── api/
-│   ├── client.ts          # Cliente HTTP do backend Markupp
+│   ├── client.ts          # Cliente HTTP do servidor Markupp
 │   └── client.test.ts
 ├── commands/
 │   └── upload-active-note.ts

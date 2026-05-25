@@ -20,11 +20,11 @@ export class MarkuppApiError extends Error {
 }
 
 export async function createNote(
-	backendUrl: string,
+	serverUrl: string,
 	path: string,
 	content: string,
 ): Promise<NoteResponse> {
-	const url = backendUrl.replace(/\/+$/, "") + "/notes";
+	const url = serverUrl.replace(/\/+$/, "") + "/notes";
 	const res = await requestUrl({
 		url,
 		method: "POST",
