@@ -1,10 +1,24 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { requestUrl } from "obsidian";
-import { createNote, MarkuppApiError } from "./client";
+import {
+	createNote,
+	getNote,
+	listNotes,
+	MarkuppApiError,
+	updateNote,
+} from "./client";
 
 vi.mock("obsidian", () => import("../__mocks__/obsidian"));
 
 const mockRequestUrl = vi.mocked(requestUrl);
+
+const noteResponse = {
+	id: "abc",
+	path: "foo.md",
+	content: "hello",
+	created_at: "2026-05-06T00:00:00Z",
+	updated_at: "2026-05-06T00:00:00Z",
+};
 
 describe("createNote", () => {
 	beforeEach(() => {
@@ -12,18 +26,11 @@ describe("createNote", () => {
 	});
 
 	test("retorna NoteResponse quando status 201", async () => {
-		const note = {
-			id: "abc",
-			path: "foo.md",
-			content: "hello",
-			created_at: "2026-05-06T00:00:00Z",
-			updated_at: "2026-05-06T00:00:00Z",
-		};
-		mockRequestUrl.mockResolvedValue({ status: 201, json: note });
+		mockRequestUrl.mockResolvedValue({ status: 201, json: noteResponse });
 
 		const result = await createNote("http://localhost:8080", "foo.md", "hello");
 
-		expect(result).toEqual(note);
+		expect(result).toEqual(noteResponse);
 		expect(mockRequestUrl).toHaveBeenCalledWith({
 			url: "http://localhost:8080/notes",
 			method: "POST",
@@ -68,6 +75,165 @@ describe("createNote", () => {
 		).rejects.toMatchObject({
 			code: "unknown",
 			message: "Erro desconhecido",
+			status: 500,
+		});
+	});
+});
+
+describe("updateNote", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("retorna NoteResponse quando status 200", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		const result = await updateNote(
+			"http://localhost:8080",
+			"abc",
+			"foo.md",
+			"hello",
+		);
+
+		expect(result).toEqual(noteResponse);
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes/abc",
+			method: "PUT",
+			contentType: "application/json",
+			body: JSON.stringify({ path: "foo.md", content: "hello" }),
+			throw: false,
+		});
+	});
+
+	test("normaliza barras finais da serverUrl", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
+
+		await updateNote("http://localhost:8080///", "abc", "foo.md", "x");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes/abc" }),
+		);
+	});
+
+	test("aplica encodeURIComponent no id", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
+
+		await updateNote("http://localhost:8080", "a/b", "foo.md", "x");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes/a%2Fb" }),
+		);
+	});
+
+	test("lança MarkuppApiError com código e mensagem do servidor", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 404,
+			json: { error: "not_found", message: "nota não encontrada" },
+		});
+
+		await expect(
+			updateNote("http://localhost:8080", "x", "foo.md", "y"),
+		).rejects.toMatchObject({
+			name: "MarkuppApiError",
+			code: "not_found",
+			status: 404,
+		});
+	});
+});
+
+describe("getNote", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("retorna NoteResponse quando status 200", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		const result = await getNote("http://localhost:8080", "abc");
+
+		expect(result).toEqual(noteResponse);
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes/abc",
+			method: "GET",
+			throw: false,
+		});
+	});
+
+	test("normaliza barras finais da serverUrl", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
+
+		await getNote("http://localhost:8080///", "abc");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes/abc" }),
+		);
+	});
+
+	test("lança MarkuppApiError com código e mensagem do servidor", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 404,
+			json: { error: "not_found", message: "nota não encontrada" },
+		});
+
+		await expect(
+			getNote("http://localhost:8080", "x"),
+		).rejects.toMatchObject({
+			code: "not_found",
+			status: 404,
+		});
+	});
+});
+
+describe("listNotes", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("retorna NoteResponse[] quando status 200", async () => {
+		const list = [
+			noteResponse,
+			{ ...noteResponse, id: "abc-2", path: "outra.md" },
+		];
+		mockRequestUrl.mockResolvedValue({ status: 200, json: list });
+
+		const result = await listNotes("http://localhost:8080");
+
+		expect(result).toEqual(list);
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes",
+			method: "GET",
+			throw: false,
+		});
+	});
+
+	test("normaliza barras finais da serverUrl", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: [] });
+
+		await listNotes("http://localhost:8080///");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes" }),
+		);
+	});
+
+	test("lista vazia retorna array vazio", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: [] });
+
+		const result = await listNotes("http://localhost:8080");
+
+		expect(result).toEqual([]);
+	});
+
+	test("lança MarkuppApiError quando servidor retorna erro", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 500,
+			json: { error: "internal", message: "erro interno" },
+		});
+
+		await expect(
+			listNotes("http://localhost:8080"),
+		).rejects.toMatchObject({
+			code: "internal",
 			status: 500,
 		});
 	});

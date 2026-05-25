@@ -1,12 +1,20 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import MarkuppPlugin from "./main";
 
+export type NoteMeta = {
+	id: string;
+	serverUpdatedAt: string;
+	localMtimeAtSync: number;
+};
+
 export interface MarkuppSettings {
 	serverUrl: string;
+	notes: Record<string, NoteMeta>;
 }
 
 export const DEFAULT_SETTINGS: MarkuppSettings = {
 	serverUrl: "http://localhost:8080",
+	notes: {},
 };
 
 export class MarkuppSettingTab extends PluginSettingTab {
