@@ -106,6 +106,55 @@ describe("updateNote", () => {
 		});
 	});
 
+	test("inclui lastModifiedAt e force no body quando informados", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		await updateNote("http://localhost:8080", "abc", "foo.md", "hello", {
+			lastModifiedAt: "2026-05-06T00:00:00Z",
+			force: true,
+		});
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: JSON.stringify({
+					path: "foo.md",
+					content: "hello",
+					lastModifiedAt: "2026-05-06T00:00:00Z",
+					force: true,
+				}),
+			}),
+		);
+	});
+
+	test("omite lastModifiedAt e force quando não informados", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		await updateNote("http://localhost:8080", "abc", "foo.md", "hello");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: JSON.stringify({ path: "foo.md", content: "hello" }),
+			}),
+		);
+	});
+
+	test("propaga 409 do servidor como código de conflito", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 409,
+			json: {
+				error: "conflict",
+				message: "nota foi atualizada por outro cliente",
+			},
+		});
+
+		await expect(
+			updateNote("http://localhost:8080", "abc", "foo.md", "x", {
+				lastModifiedAt: "2026-01-01T00:00:00Z",
+				force: false,
+			}),
+		).rejects.toMatchObject({ code: "conflict", status: 409 });
+	});
+
 	test("normaliza barras finais da serverUrl", async () => {
 		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
 

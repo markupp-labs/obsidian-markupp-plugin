@@ -175,7 +175,10 @@ export async function forcePush(
 	} else {
 		const content = await plugin.app.vault.read(file);
 		if (meta?.id && !meta.tombstone) {
-			const note = await updateNote(settings.serverUrl, meta.id, path, content);
+			const note = await updateNote(settings.serverUrl, meta.id, path, content, {
+				lastModifiedAt: meta.serverUpdatedAt,
+				force: true,
+			});
 			setNoteMeta(settings, path, {
 				id: note.id,
 				path,
@@ -240,7 +243,10 @@ async function applyModifiedLocal(
 	const file = plugin.app.vault.getAbstractFileByPath(e.path) as TFile | null;
 	if (!file) return;
 	const content = await plugin.app.vault.read(file);
-	const note = await updateNote(settings.serverUrl, meta.id, e.path, content);
+	const note = await updateNote(settings.serverUrl, meta.id, e.path, content, {
+		lastModifiedAt: meta.serverUpdatedAt,
+		force: false,
+	});
 	setNoteMeta(settings, e.path, {
 		id: note.id,
 		path: e.path,

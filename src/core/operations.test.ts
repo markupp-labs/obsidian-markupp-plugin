@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import * as client from "../api/client";
 import type { MarkuppSettings } from "../settings";
 import { TFile, TFolder } from "../__mocks__/obsidian";
-import { currentStatus, fetchRemote, pull, push, sync } from "./operations";
+import {
+	currentStatus,
+	fetchRemote,
+	forcePush,
+	pull,
+	push,
+	sync,
+} from "./operations";
 
 vi.mock("obsidian", () => import("../__mocks__/obsidian"));
 vi.mock("../api/client", () => ({
@@ -162,7 +169,12 @@ describe("push", () => {
 
 		await push(plugin as never, s);
 
-		expect(updateNote).toHaveBeenCalledWith("http://x", "id1", "a.md", "v2");
+		// envia lastModifiedAt (= serverUpdatedAt conhecido) e force:false,
+		// para o optimistic locking do servidor não recusar a edição.
+		expect(updateNote).toHaveBeenCalledWith("http://x", "id1", "a.md", "v2", {
+			lastModifiedAt: "T1",
+			force: false,
+		});
 		expect(s.notes["a.md"].serverUpdatedAt).toBe("T2");
 	});
 
@@ -470,5 +482,42 @@ describe("sync", () => {
 		expect(listNotes).toHaveBeenCalled();
 		expect(createNote).toHaveBeenCalled();
 		expect(r.pushed).toBe(1);
+	});
+});
+
+describe("forcePush", () => {
+	test("envia force:true para sobrescrever o servidor (resolução de conflito)", async () => {
+		const { plugin } = makeFakePlugin({
+			files: [{ path: "a.md", mtime: 200, content: "meu" }],
+		});
+		const s = settings({
+			notes: {
+				"a.md": {
+					id: "id1",
+					path: "a.md",
+					serverUpdatedAt: "T1",
+					localMtimeAtSync: 100,
+				},
+			},
+			lastFetch: {
+				at: "now",
+				remote: { "a.md": { id: "id1", path: "a.md", updatedAt: "T2" } },
+			},
+		});
+		updateNote.mockResolvedValue({
+			id: "id1",
+			path: "a.md",
+			content: "meu",
+			created_at: "T0",
+			updated_at: "T3",
+		});
+
+		await forcePush(plugin as never, s, "a.md");
+
+		expect(updateNote).toHaveBeenCalledWith("http://x", "id1", "a.md", "meu", {
+			lastModifiedAt: "T1",
+			force: true,
+		});
+		expect(s.notes["a.md"].serverUpdatedAt).toBe("T3");
 	});
 });
