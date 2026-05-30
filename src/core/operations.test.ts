@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import * as client from "../api/client";
 import type { MarkuppSettings } from "../settings";
-import { TFile } from "../__mocks__/obsidian";
+import { TFile, TFolder } from "../__mocks__/obsidian";
 import { currentStatus, fetchRemote, pull, push, sync } from "./operations";
 
 vi.mock("obsidian", () => import("../__mocks__/obsidian"));
@@ -41,7 +41,8 @@ function makeFakePlugin(opts: FakePluginOpts = {}) {
 		contentMap.set(f.path, f.content ?? "");
 	}
 	const vault = {
-		getMarkdownFiles: () => Array.from(fileMap.values()),
+		getMarkdownFiles: () =>
+			Array.from(fileMap.values()).filter((f) => f instanceof TFile),
 		getAbstractFileByPath: (p: string) => fileMap.get(p) ?? null,
 		read: async (f: TFile) => contentMap.get(f.path) ?? "",
 		modify: vi.fn(async (f: TFile, content: string) => {
@@ -54,7 +55,11 @@ function makeFakePlugin(opts: FakePluginOpts = {}) {
 			contentMap.set(p, content);
 			return tf;
 		}),
-		createFolder: vi.fn(async () => undefined),
+		createFolder: vi.fn(async (p: string) => {
+			const folder = new TFolder(p);
+			fileMap.set(p, folder as unknown as TFile);
+			return folder;
+		}),
 		delete: vi.fn(async (f: TFile) => {
 			fileMap.delete(f.path);
 		}),
@@ -291,6 +296,68 @@ describe("pull", () => {
 		expect(getNote).toHaveBeenCalledWith("http://x", "id1");
 		expect(fileMap.has("a.md")).toBe(true);
 		expect(s.notes["a.md"]).toMatchObject({ id: "id1", serverUpdatedAt: "T1" });
+	});
+
+	test("new_remote: cria pastas aninhadas a partir do path do servidor", async () => {
+		const { plugin, vault, fileMap } = makeFakePlugin();
+		const s = settings({
+			lastFetch: {
+				at: "now",
+				remote: {
+					"projetos/ideias/nota.md": {
+						id: "id1",
+						path: "projetos/ideias/nota.md",
+						updatedAt: "T1",
+					},
+				},
+			},
+		});
+		getNote.mockResolvedValue({
+			id: "id1",
+			path: "projetos/ideias/nota.md",
+			content: "conteúdo",
+			created_at: "T0",
+			updated_at: "T1",
+		});
+
+		await pull(plugin as never, s);
+
+		// cria cada nível de pasta uma vez, na ordem
+		expect(vault.createFolder.mock.calls.map((c) => c[0])).toEqual([
+			"projetos",
+			"projetos/ideias",
+		]);
+		expect(fileMap.has("projetos/ideias/nota.md")).toBe(true);
+	});
+
+	test("new_remote: não recria pastas que já existem", async () => {
+		const { plugin, vault } = makeFakePlugin();
+		// pasta "projetos" já existe no vault
+		vault.createFolder("projetos");
+		vault.createFolder.mockClear();
+		const s = settings({
+			lastFetch: {
+				at: "now",
+				remote: {
+					"projetos/nota.md": {
+						id: "id1",
+						path: "projetos/nota.md",
+						updatedAt: "T1",
+					},
+				},
+			},
+		});
+		getNote.mockResolvedValue({
+			id: "id1",
+			path: "projetos/nota.md",
+			content: "x",
+			created_at: "T0",
+			updated_at: "T1",
+		});
+
+		await pull(plugin as never, s);
+
+		expect(vault.createFolder).not.toHaveBeenCalled();
 	});
 
 	test("deleted_remote: apaga arquivo local e remove meta", async () => {

@@ -331,20 +331,38 @@ async function writeFile(
 	path: string,
 	content: string,
 ): Promise<void> {
-	const slash = path.lastIndexOf("/");
-	if (slash > 0) {
-		const dir = path.slice(0, slash);
-		try {
-			await plugin.app.vault.createFolder(dir);
-		} catch {
-			// folder may already exist
-		}
-	}
+	await ensureParentFolders(plugin, path);
 	const existing = plugin.app.vault.getAbstractFileByPath(path) as TFile | null;
 	if (existing) {
 		await plugin.app.vault.modify(existing, content);
 	} else {
 		await plugin.app.vault.create(path, content);
+	}
+}
+
+/**
+ * Garante que todas as pastas do caminho existam antes de criar a nota,
+ * criando cada nível que ainda não existe. O servidor guarda apenas o path
+ * (ex.: "projetos/ideias/nota.md"); as pastas são derivadas dele no pull.
+ */
+async function ensureParentFolders(
+	plugin: PluginLike,
+	path: string,
+): Promise<void> {
+	const slash = path.lastIndexOf("/");
+	if (slash <= 0) return;
+	const segments = path.slice(0, slash).split("/");
+	let current = "";
+	for (const segment of segments) {
+		current = current ? `${current}/${segment}` : segment;
+		if (plugin.app.vault.getAbstractFileByPath(current)) continue;
+		try {
+			await plugin.app.vault.createFolder(current);
+		} catch (err) {
+			// Corrida: a pasta pode ter sido criada nesse meio tempo. Só
+			// propaga o erro se ela realmente continuar ausente.
+			if (!plugin.app.vault.getAbstractFileByPath(current)) throw err;
+		}
 	}
 }
 
