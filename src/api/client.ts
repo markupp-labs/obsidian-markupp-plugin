@@ -87,6 +87,22 @@ export async function getNote(
 	throw toApiError(res);
 }
 
+export async function deleteNote(
+	serverUrl: string,
+	id: string,
+): Promise<void> {
+	const res = await requestUrl({
+		url: notesUrl(serverUrl, "/" + encodeURIComponent(id)),
+		method: "DELETE",
+		throw: false,
+	});
+
+	if (res.status === 204 || res.status === 200) {
+		return;
+	}
+	throw toApiError(res);
+}
+
 export async function listNotes(serverUrl: string): Promise<NoteResponse[]> {
 	const res = await requestUrl({
 		url: notesUrl(serverUrl),

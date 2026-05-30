@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { requestUrl } from "obsidian";
 import {
 	createNote,
+	deleteNote,
 	getNote,
 	listNotes,
 	MarkuppApiError,
@@ -178,6 +179,58 @@ describe("getNote", () => {
 		await expect(
 			getNote("http://localhost:8080", "x"),
 		).rejects.toMatchObject({
+			code: "not_found",
+			status: 404,
+		});
+	});
+});
+
+describe("deleteNote", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("resolve quando status 204", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 204, json: undefined });
+
+		await expect(
+			deleteNote("http://localhost:8080", "abc"),
+		).resolves.toBeUndefined();
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes/abc",
+			method: "DELETE",
+			throw: false,
+		});
+	});
+
+	test("resolve quando status 200", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
+
+		await expect(
+			deleteNote("http://localhost:8080", "abc"),
+		).resolves.toBeUndefined();
+	});
+
+	test("aplica encodeURIComponent no id", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 204, json: undefined });
+
+		await deleteNote("http://localhost:8080", "a/b");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes/a%2Fb" }),
+		);
+	});
+
+	test("lança MarkuppApiError com código e mensagem do servidor", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 404,
+			json: { error: "not_found", message: "nota não encontrada" },
+		});
+
+		await expect(
+			deleteNote("http://localhost:8080", "x"),
+		).rejects.toMatchObject({
+			name: "MarkuppApiError",
 			code: "not_found",
 			status: 404,
 		});
