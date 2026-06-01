@@ -33,7 +33,7 @@ export default class MarkuppPlugin extends Plugin {
 			(leaf: WorkspaceLeaf) => new SourceControlView(leaf, this),
 		);
 
-		this.addRibbonIcon("git-branch", "Markupp", () => this.activateView());
+		this.addRibbonIcon("square-arrow-up", "Markupp", () => this.activateView());
 
 		this.addCommand({
 			id: "markupp-status",

@@ -82,7 +82,7 @@ export class SourceControlView extends ItemView {
 		root.addClass("markupp-scv");
 
 		const header = root.createDiv({ cls: "markupp-scv-header" });
-		header.createEl("h4", { text: "Markupp — source control" });
+		header.createEl("h4", { text: "Painel de Controle Markupp" });
 
 		const toolbar = root.createDiv({ cls: "markupp-scv-toolbar" });
 		this.makeButton(toolbar, "Fetch", async () => {
