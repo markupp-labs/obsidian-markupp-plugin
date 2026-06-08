@@ -3,19 +3,42 @@ import MarkuppPlugin from "./main";
 
 export type NoteMeta = {
 	id: string;
+	path: string;
 	serverUpdatedAt: string;
 	localMtimeAtSync: number;
+	tombstone?: boolean;
+};
+
+export type RemoteEntry = {
+	id: string;
+	path: string;
+	updatedAt: string;
+};
+
+export type LastFetch = {
+	at: string;
+	remote: Record<string, RemoteEntry>;
 };
 
 export interface MarkuppSettings {
 	serverUrl: string;
 	notes: Record<string, NoteMeta>;
+	lastFetch?: LastFetch;
 }
 
 export const DEFAULT_SETTINGS: MarkuppSettings = {
 	serverUrl: "http://localhost:8080",
 	notes: {},
 };
+
+export function migrateSettings(settings: MarkuppSettings): MarkuppSettings {
+	for (const [key, meta] of Object.entries(settings.notes)) {
+		if (!meta.path) {
+			meta.path = key;
+		}
+	}
+	return settings;
+}
 
 export class MarkuppSettingTab extends PluginSettingTab {
 	plugin: MarkuppPlugin;

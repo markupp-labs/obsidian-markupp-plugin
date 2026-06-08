@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { requestUrl } from "obsidian";
 import {
 	createNote,
+	deleteNote,
 	getNote,
 	listNotes,
 	MarkuppApiError,
@@ -105,6 +106,55 @@ describe("updateNote", () => {
 		});
 	});
 
+	test("inclui lastModifiedAt e force no body quando informados", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		await updateNote("http://localhost:8080", "abc", "foo.md", "hello", {
+			lastModifiedAt: "2026-05-06T00:00:00Z",
+			force: true,
+		});
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: JSON.stringify({
+					path: "foo.md",
+					content: "hello",
+					lastModifiedAt: "2026-05-06T00:00:00Z",
+					force: true,
+				}),
+			}),
+		);
+	});
+
+	test("omite lastModifiedAt e force quando não informados", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: noteResponse });
+
+		await updateNote("http://localhost:8080", "abc", "foo.md", "hello");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: JSON.stringify({ path: "foo.md", content: "hello" }),
+			}),
+		);
+	});
+
+	test("propaga 409 do servidor como código de conflito", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 409,
+			json: {
+				error: "conflict",
+				message: "nota foi atualizada por outro cliente",
+			},
+		});
+
+		await expect(
+			updateNote("http://localhost:8080", "abc", "foo.md", "x", {
+				lastModifiedAt: "2026-01-01T00:00:00Z",
+				force: false,
+			}),
+		).rejects.toMatchObject({ code: "conflict", status: 409 });
+	});
+
 	test("normaliza barras finais da serverUrl", async () => {
 		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
 
@@ -178,6 +228,58 @@ describe("getNote", () => {
 		await expect(
 			getNote("http://localhost:8080", "x"),
 		).rejects.toMatchObject({
+			code: "not_found",
+			status: 404,
+		});
+	});
+});
+
+describe("deleteNote", () => {
+	beforeEach(() => {
+		mockRequestUrl.mockReset();
+	});
+
+	test("resolve quando status 204", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 204, json: undefined });
+
+		await expect(
+			deleteNote("http://localhost:8080", "abc"),
+		).resolves.toBeUndefined();
+		expect(mockRequestUrl).toHaveBeenCalledWith({
+			url: "http://localhost:8080/notes/abc",
+			method: "DELETE",
+			throw: false,
+		});
+	});
+
+	test("resolve quando status 200", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 200, json: {} });
+
+		await expect(
+			deleteNote("http://localhost:8080", "abc"),
+		).resolves.toBeUndefined();
+	});
+
+	test("aplica encodeURIComponent no id", async () => {
+		mockRequestUrl.mockResolvedValue({ status: 204, json: undefined });
+
+		await deleteNote("http://localhost:8080", "a/b");
+
+		expect(mockRequestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ url: "http://localhost:8080/notes/a%2Fb" }),
+		);
+	});
+
+	test("lança MarkuppApiError com código e mensagem do servidor", async () => {
+		mockRequestUrl.mockResolvedValue({
+			status: 404,
+			json: { error: "not_found", message: "nota não encontrada" },
+		});
+
+		await expect(
+			deleteNote("http://localhost:8080", "x"),
+		).rejects.toMatchObject({
+			name: "MarkuppApiError",
 			code: "not_found",
 			status: 404,
 		});

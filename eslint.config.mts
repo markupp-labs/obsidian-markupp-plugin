@@ -38,6 +38,7 @@ export default tseslint.config(
 		"node_modules",
 		"dist",
 		"coverage",
+		"build",
 		"esbuild.config.mjs",
 		"eslint.config.js",
 		"version-bump.mjs",

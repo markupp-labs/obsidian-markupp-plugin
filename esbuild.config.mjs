@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
 
 const banner =
 `/*
@@ -10,6 +11,28 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+
+const outdir = "build";
+
+// Garante a pasta de saída e copia os arquivos estáticos que o Obsidian
+// precisa junto do main.js (manifest e estilos).
+function copyStaticFiles() {
+	if (!existsSync(outdir)) {
+		mkdirSync(outdir, { recursive: true });
+	}
+	copyFileSync("manifest.json", `${outdir}/manifest.json`);
+	if (existsSync("styles.css")) {
+		copyFileSync("styles.css", `${outdir}/styles.css`);
+	}
+}
+
+// Recopia os estáticos a cada rebuild (importante no modo watch/dev).
+const copyStaticPlugin = {
+	name: "copy-static-files",
+	setup(build) {
+		build.onEnd(() => copyStaticFiles());
+	},
+};
 
 const context = await esbuild.context({
 	banner: {
@@ -37,8 +60,9 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "main.js",
+	outfile: `${outdir}/main.js`,
 	minify: prod,
+	plugins: [copyStaticPlugin],
 });
 
 if (prod) {

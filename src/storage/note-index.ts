@@ -12,7 +12,7 @@ export function setNoteMeta(
 	path: string,
 	meta: NoteMeta,
 ): void {
-	settings.notes[path] = meta;
+	settings.notes[path] = { ...meta, path };
 }
 
 export function removeNoteMeta(
@@ -22,6 +22,15 @@ export function removeNoteMeta(
 	delete settings.notes[path];
 }
 
+export function markTombstone(
+	settings: MarkuppSettings,
+	path: string,
+): void {
+	const meta = settings.notes[path];
+	if (!meta) return;
+	meta.tombstone = true;
+}
+
 export function renameNote(
 	settings: MarkuppSettings,
 	oldPath: string,
@@ -29,6 +38,10 @@ export function renameNote(
 ): void {
 	const meta = settings.notes[oldPath];
 	if (!meta) return;
-	settings.notes[newPath] = meta;
+	settings.notes[newPath] = { ...meta, path: newPath };
 	delete settings.notes[oldPath];
+}
+
+export function listMetas(settings: MarkuppSettings): NoteMeta[] {
+	return Object.values(settings.notes);
 }

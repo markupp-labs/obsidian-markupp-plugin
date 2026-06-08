@@ -13,6 +13,7 @@ function emptySettings(): MarkuppSettings {
 
 const meta: NoteMeta = {
 	id: "abc",
+	path: "foo.md",
 	serverUpdatedAt: "2026-05-09T00:00:00Z",
 	localMtimeAtSync: 1234567890,
 };
@@ -52,7 +53,7 @@ describe("note-index", () => {
 		renameNote(settings, "old.md", "new.md");
 
 		expect(getNoteMeta(settings, "old.md")).toBeUndefined();
-		expect(getNoteMeta(settings, "new.md")).toEqual(meta);
+		expect(getNoteMeta(settings, "new.md")).toEqual({ ...meta, path: "new.md" });
 	});
 
 	test("renameNote é no-op se origem não existe", () => {
