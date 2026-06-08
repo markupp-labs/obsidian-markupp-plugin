@@ -5,11 +5,11 @@ import {
 	fetchRemote,
 	forcePull,
 	forcePush,
-	notifyResult,
 	pull,
 	push,
 	sync,
 } from "../../core/operations";
+import { notifyResult } from "../notify";
 import { StatusEntry, StatusKind } from "../../core/status";
 
 export const VIEW_TYPE_MARKUPP_SCV = "markupp-source-control";

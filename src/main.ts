@@ -5,13 +5,8 @@ import {
 	MarkuppSettingTab,
 	migrateSettings,
 } from "./settings";
-import {
-	fetchRemote,
-	notifyResult,
-	pull,
-	push,
-	sync,
-} from "./core/operations";
+import { fetchRemote, pull, push, sync } from "./core/operations";
+import { notifyResult } from "./ui/notify";
 import {
 	SourceControlView,
 	VIEW_TYPE_MARKUPP_SCV,

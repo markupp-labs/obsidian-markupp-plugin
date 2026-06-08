@@ -18,7 +18,16 @@ vi.mock("../api/client", () => ({
 	deleteNote: vi.fn(),
 	getNote: vi.fn(),
 	listNotes: vi.fn(),
-	MarkuppApiError: class MarkuppApiError extends Error {},
+	MarkuppApiError: class MarkuppApiError extends Error {
+		code: string;
+		status: number;
+		constructor(code: string, message: string, status: number) {
+			super(message);
+			this.name = "MarkuppApiError";
+			this.code = code;
+			this.status = status;
+		}
+	},
 }));
 
 const createNote = vi.mocked(client.createNote);
@@ -283,6 +292,86 @@ describe("push", () => {
 		expect(updateNote).not.toHaveBeenCalled();
 		expect(r.applied).toBe(0);
 		expect(r.skipped).toBe(1);
+	});
+
+	test("modified_local: 409 do servidor vira skipped sem derrubar o resto do lote", async () => {
+		const { plugin } = makeFakePlugin({
+			files: [
+				{ path: "a.md", mtime: 200, content: "v2" },
+				{ path: "b.md", mtime: 100, content: "nova" },
+			],
+		});
+		const s = settings({
+			notes: {
+				"a.md": {
+					id: "id1",
+					path: "a.md",
+					serverUpdatedAt: "T1",
+					localMtimeAtSync: 100,
+				},
+			},
+			lastFetch: {
+				at: "now",
+				remote: { "a.md": { id: "id1", path: "a.md", updatedAt: "T1" } },
+			},
+		});
+		// a.md mudou no servidor entre fetch e push: o update responde 409.
+		updateNote.mockRejectedValue(
+			new client.MarkuppApiError("conflict", "conflito de versão", 409),
+		);
+		createNote.mockResolvedValue({
+			id: "id2",
+			path: "b.md",
+			content: "nova",
+			created_at: "T0",
+			updated_at: "T1",
+		});
+
+		const r = await push(plugin as never, s);
+
+		expect(r.skipped).toBe(1);
+		expect(r.applied).toBe(1); // b.md continua sendo enviada
+		expect(createNote).toHaveBeenCalledWith("http://x", "b.md", "nova");
+	});
+
+	test("erro fora de conflito persiste o progresso parcial (saveData no finally)", async () => {
+		const { plugin } = makeFakePlugin({
+			files: [
+				{ path: "a.md", mtime: 100, content: "nova" },
+				{ path: "b.md", mtime: 200, content: "v2" },
+			],
+		});
+		const s = settings({
+			notes: {
+				"b.md": {
+					id: "idb",
+					path: "b.md",
+					serverUpdatedAt: "T1",
+					localMtimeAtSync: 100,
+				},
+			},
+			lastFetch: {
+				at: "now",
+				remote: { "b.md": { id: "idb", path: "b.md", updatedAt: "T1" } },
+			},
+		});
+		createNote.mockResolvedValue({
+			id: "ida",
+			path: "a.md",
+			content: "nova",
+			created_at: "T0",
+			updated_at: "T1",
+		});
+		updateNote.mockRejectedValue(
+			new client.MarkuppApiError("server_error", "falhou", 500),
+		);
+
+		await expect(push(plugin as never, s)).rejects.toThrow();
+
+		// a.md já tinha ido pro servidor antes do erro em b.md: o meta precisa
+		// estar gravado, senão ela voltaria como new_local no próximo push.
+		expect(s.notes["a.md"]).toMatchObject({ id: "ida" });
+		expect(plugin.saveData).toHaveBeenCalled();
 	});
 });
 

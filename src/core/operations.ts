@@ -1,9 +1,11 @@
-import { Notice, Plugin, TFile } from "obsidian";
+import { Plugin, TFile } from "obsidian";
 import {
 	createNote,
 	deleteNote,
 	getNote,
 	listNotes,
+	MarkuppApiError,
+	NoteResponse,
 	updateNote,
 } from "../api/client";
 import { MarkuppSettings, RemoteEntry } from "../settings";
@@ -47,35 +49,41 @@ export async function pull(
 	let applied = 0;
 	let skipped = 0;
 
-	for (const e of all) {
-		switch (e.kind) {
-			case "new_remote":
-				await applyNewRemote(plugin, settings, e);
-				applied++;
-				break;
-			case "modified_remote":
-				await applyModifiedRemote(plugin, settings, e);
-				applied++;
-				break;
-			case "deleted_remote":
-				await applyDeletedRemote(plugin, settings, e);
-				applied++;
-				break;
-			case "deleted_local":
-				// Nota deletada localmente mas ainda no servidor: pull traz a
-				// cópia do servidor de volta (push é quem confirma a exclusão).
-				await applyNewRemote(plugin, settings, e);
-				applied++;
-				break;
-			case "conflict":
-				skipped++;
-				break;
-			default:
-				break;
+	// O saveData fica num finally: se algum apply* lançar no meio do lote, os
+	// metas das notas já aplicadas precisam ser persistidos mesmo assim, senão
+	// no próximo ciclo elas reaparecem como diff e podem duplicar.
+	try {
+		for (const e of all) {
+			switch (e.kind) {
+				case "new_remote":
+					await applyNewRemote(plugin, settings, e);
+					applied++;
+					break;
+				case "modified_remote":
+					await applyModifiedRemote(plugin, settings, e);
+					applied++;
+					break;
+				case "deleted_remote":
+					await applyDeletedRemote(plugin, settings, e);
+					applied++;
+					break;
+				case "deleted_local":
+					// Nota deletada localmente mas ainda no servidor: pull traz a
+					// cópia do servidor de volta (push é quem confirma a exclusão).
+					await applyNewRemote(plugin, settings, e);
+					applied++;
+					break;
+				case "conflict":
+					skipped++;
+					break;
+				default:
+					break;
+			}
 		}
+	} finally {
+		await plugin.saveData(settings);
 	}
 
-	await plugin.saveData(settings);
 	return { applied, skipped };
 }
 
@@ -88,29 +96,43 @@ export async function push(
 	let applied = 0;
 	let skipped = 0;
 
-	for (const e of all) {
-		switch (e.kind) {
-			case "new_local":
-				await applyNewLocal(plugin, settings, e);
-				applied++;
-				break;
-			case "modified_local":
-				await applyModifiedLocal(plugin, settings, e);
-				applied++;
-				break;
-			case "deleted_local":
-				await applyDeletedLocal(plugin, settings, e);
-				applied++;
-				break;
-			case "conflict":
-				skipped++;
-				break;
-			default:
-				break;
+	try {
+		for (const e of all) {
+			try {
+				switch (e.kind) {
+					case "new_local":
+						await applyNewLocal(plugin, settings, e);
+						applied++;
+						break;
+					case "modified_local":
+						await applyModifiedLocal(plugin, settings, e);
+						applied++;
+						break;
+					case "deleted_local":
+						await applyDeletedLocal(plugin, settings, e);
+						applied++;
+						break;
+					case "conflict":
+						skipped++;
+						break;
+					default:
+						break;
+				}
+			} catch (err) {
+				// Se a nota mudou no servidor entre o fetch e o push, o update vem
+				// com 409. Isso é um conflito a resolver na mão (force push/pull),
+				// não um erro que deve abortar o envio das outras notas.
+				if (isConflict(err)) {
+					skipped++;
+					continue;
+				}
+				throw err;
+			}
 		}
+	} finally {
+		await plugin.saveData(settings);
 	}
 
-	await plugin.saveData(settings);
 	return { applied, skipped };
 }
 
@@ -134,24 +156,24 @@ export async function forcePull(
 	path: string,
 ): Promise<void> {
 	const remote = settings.lastFetch?.remote[path];
-	if (!remote) {
-		await applyDeletedRemote(plugin, settings, {
-			path,
-			id: getNoteMeta(settings, path)?.id,
-			kind: "deleted_remote",
-		});
-	} else {
-		const note = await getNote(settings.serverUrl, remote.id);
-		await writeFile(plugin, path, note.content);
-		const file = plugin.app.vault.getAbstractFileByPath(path) as TFile | null;
-		setNoteMeta(settings, path, {
-			id: note.id,
-			path,
-			serverUpdatedAt: note.updated_at,
-			localMtimeAtSync: file?.stat.mtime ?? 0,
-		});
+	try {
+		if (remote) {
+			await applyNewRemote(plugin, settings, {
+				path,
+				id: remote.id,
+				kind: "new_remote",
+			});
+		} else {
+			// Sumiu do servidor: o force pull equivale a aceitar a exclusão remota.
+			await applyDeletedRemote(plugin, settings, {
+				path,
+				id: getNoteMeta(settings, path)?.id,
+				kind: "deleted_remote",
+			});
+		}
+	} finally {
+		await plugin.saveData(settings);
 	}
-	await plugin.saveData(settings);
 }
 
 export async function forcePush(
@@ -161,43 +183,33 @@ export async function forcePush(
 ): Promise<void> {
 	const meta = getNoteMeta(settings, path);
 	const file = plugin.app.vault.getAbstractFileByPath(path) as TFile | null;
-
-	if (!file) {
-		if (meta?.id) {
-			try {
-				await deleteNote(settings.serverUrl, meta.id);
-			} catch {
-				// ignore
-			}
-			removeNoteMeta(settings, path);
-			if (settings.lastFetch) delete settings.lastFetch.remote[path];
-		}
-	} else {
-		const content = await plugin.app.vault.read(file);
-		if (meta?.id && !meta.tombstone) {
-			const note = await updateNote(settings.serverUrl, meta.id, path, content, {
-				lastModifiedAt: meta.serverUpdatedAt,
-				force: true,
-			});
-			setNoteMeta(settings, path, {
-				id: note.id,
+	try {
+		if (!file) {
+			// Arquivo não existe mais localmente: força a exclusão no servidor.
+			await applyDeletedLocal(plugin, settings, {
 				path,
-				serverUpdatedAt: note.updated_at,
-				localMtimeAtSync: file.stat.mtime,
+				id: meta?.id,
+				kind: "deleted_local",
 			});
-			syncRemoteSnapshot(settings, path, note.id, note.updated_at);
+		} else if (meta?.id && !meta.tombstone) {
+			// Já conhecida pelo servidor: reaproveita o update, mas com force pra
+			// vencer o optimistic locking e sobrescrever a versão remota.
+			await applyModifiedLocal(
+				plugin,
+				settings,
+				{ path, id: meta.id, kind: "modified_local" },
+				true,
+			);
 		} else {
-			const note = await createNote(settings.serverUrl, path, content);
-			setNoteMeta(settings, path, {
-				id: note.id,
-				path,
-				serverUpdatedAt: note.updated_at,
-				localMtimeAtSync: file.stat.mtime,
-			});
-			syncRemoteSnapshot(settings, path, note.id, note.updated_at);
+			await applyNewLocal(plugin, settings, { path, kind: "new_local" });
 		}
+	} finally {
+		await plugin.saveData(settings);
 	}
-	await plugin.saveData(settings);
+}
+
+function isConflict(err: unknown): boolean {
+	return err instanceof MarkuppApiError && err.status === 409;
 }
 
 /**
@@ -215,6 +227,26 @@ function syncRemoteSnapshot(
 	settings.lastFetch.remote[path] = { id, path, updatedAt };
 }
 
+/**
+ * Registra que `path` está em dia com o servidor: grava o meta local e alinha o
+ * snapshot remoto com a resposta recém-recebida. Centraliza o par
+ * setNoteMeta + syncRemoteSnapshot que todo apply* precisa fazer ao final.
+ */
+function recordSynced(
+	settings: MarkuppSettings,
+	path: string,
+	note: NoteResponse,
+	mtime: number,
+): void {
+	setNoteMeta(settings, path, {
+		id: note.id,
+		path,
+		serverUpdatedAt: note.updated_at,
+		localMtimeAtSync: mtime,
+	});
+	syncRemoteSnapshot(settings, path, note.id, note.updated_at);
+}
+
 async function applyNewLocal(
 	plugin: PluginLike,
 	settings: MarkuppSettings,
@@ -224,19 +256,14 @@ async function applyNewLocal(
 	if (!file) return;
 	const content = await plugin.app.vault.read(file);
 	const note = await createNote(settings.serverUrl, e.path, content);
-	setNoteMeta(settings, e.path, {
-		id: note.id,
-		path: e.path,
-		serverUpdatedAt: note.updated_at,
-		localMtimeAtSync: file.stat.mtime,
-	});
-	syncRemoteSnapshot(settings, e.path, note.id, note.updated_at);
+	recordSynced(settings, e.path, note, file.stat.mtime);
 }
 
 async function applyModifiedLocal(
 	plugin: PluginLike,
 	settings: MarkuppSettings,
 	e: StatusEntry,
+	force = false,
 ): Promise<void> {
 	const meta = getNoteMeta(settings, e.path);
 	if (!meta) return;
@@ -245,15 +272,9 @@ async function applyModifiedLocal(
 	const content = await plugin.app.vault.read(file);
 	const note = await updateNote(settings.serverUrl, meta.id, e.path, content, {
 		lastModifiedAt: meta.serverUpdatedAt,
-		force: false,
+		force,
 	});
-	setNoteMeta(settings, e.path, {
-		id: note.id,
-		path: e.path,
-		serverUpdatedAt: note.updated_at,
-		localMtimeAtSync: file.stat.mtime,
-	});
-	syncRemoteSnapshot(settings, e.path, note.id, note.updated_at);
+	recordSynced(settings, e.path, note, file.stat.mtime);
 }
 
 async function applyDeletedLocal(
@@ -282,12 +303,7 @@ async function applyNewRemote(
 	const note = await getNote(settings.serverUrl, e.id);
 	await writeFile(plugin, e.path, note.content);
 	const file = plugin.app.vault.getAbstractFileByPath(e.path) as TFile | null;
-	setNoteMeta(settings, e.path, {
-		id: note.id,
-		path: e.path,
-		serverUpdatedAt: note.updated_at,
-		localMtimeAtSync: file?.stat.mtime ?? 0,
-	});
+	recordSynced(settings, e.path, note, file?.stat.mtime ?? 0);
 }
 
 async function applyModifiedRemote(
@@ -304,12 +320,7 @@ async function applyModifiedRemote(
 		await writeFile(plugin, e.path, note.content);
 	}
 	const fresh = plugin.app.vault.getAbstractFileByPath(e.path) as TFile | null;
-	setNoteMeta(settings, e.path, {
-		id: note.id,
-		path: e.path,
-		serverUpdatedAt: note.updated_at,
-		localMtimeAtSync: fresh?.stat.mtime ?? 0,
-	});
+	recordSynced(settings, e.path, note, fresh?.stat.mtime ?? 0);
 }
 
 async function applyDeletedRemote(
@@ -370,23 +381,4 @@ async function ensureParentFolders(
 			if (!plugin.app.vault.getAbstractFileByPath(current)) throw err;
 		}
 	}
-}
-
-export function notifyResult(
-	op: "fetch" | "pull" | "push" | "sync",
-	result: { applied?: number; skipped?: number; pulled?: number; pushed?: number; conflicts?: number },
-): void {
-	if (op === "fetch") {
-		new Notice("Markupp: fetch concluído.");
-		return;
-	}
-	if (op === "sync") {
-		const r = result as { pulled: number; pushed: number; conflicts: number };
-		new Notice(
-			`Markupp sync: ${r.pulled} baixadas, ${r.pushed} enviadas, ${r.conflicts} conflitos.`,
-		);
-		return;
-	}
-	const r = result as { applied: number; skipped: number };
-	new Notice(`Markupp ${op}: ${r.applied} aplicadas, ${r.skipped} conflitos.`);
 }
