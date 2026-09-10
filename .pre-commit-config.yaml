@@ -1,0 +1,10 @@
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: local
+    hooks:
+      - id: mensagem-de-commit
+        name: valida a mensagem de commit
+        entry: scripts/valida-mensagem-de-commit.sh
+        language: script
+        stages: [commit-msg]
