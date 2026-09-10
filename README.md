@@ -70,6 +70,12 @@ npm run build
 
 Gera os arquivos em `build/`. Para distribuição, junte `main.js`, `manifest.json` e `styles.css`. O workflow `.github/workflows/release.yml` faz isso e anexa o zip a cada release publicada.
 
+## Documentação
+
+- [Arquitetura C4](docs/arquitetura-c4.md)
+- [Testes de aceitação](docs/testes-aceitacao.md)
+- [ADRs](docs/adrs/)
+
 ## Licença
 
 MIT. Ver [LICENSE](LICENSE) e [ADR-0001](docs/adrs/ADR-0001-licenca-mit.md).
