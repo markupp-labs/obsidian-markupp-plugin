@@ -1,20 +1,25 @@
 # Markupp Plugin (Obsidian)
 
-Plugin Obsidian do projeto [Markupp](../README.md). Permite enviar a nota ativa do vault para o servidor Markupp, que armazena e versiona o conteúdo de forma centralizada.
+Plugin Obsidian do projeto [Markupp](https://github.com/markupp-labs/markupp). Sincroniza as notas do vault com o servidor Markupp, que armazena o conteúdo de forma centralizada.
+
+## Instalação
+
+1. Baixe o artefato da release mais recente: `markupp-plugin-<versao>.zip` (ou os arquivos `main.js`, `manifest.json` e `styles.css` anexados à release).
+2. Crie a pasta `<seu-vault>/.obsidian/plugins/obsidian-markupp-plugin/` e coloque os três arquivos nela (extraia o zip aqui).
+3. No Obsidian: **Configurações → Plugins da comunidade**, ative o **Markupp**.
+4. Nas opções do plugin, ajuste o **`serverUrl`** (padrão `http://localhost:8080`) para o endereço do servidor Markupp.
+5. Use o ícone na barra lateral ou os comandos **Fetch / Pull / Push / Sync** para sincronizar suas notas.
 
 ## Pré-requisitos
 
-- Node.js 20+
-- Servidor Markupp rodando localmente (ver [`../markupp`](../markupp) ou `docker compose up` na raiz do monorepo)
+- Node.js 20+ para buildar a partir do fonte
+- Servidor Markupp rodando. Ver [DEPLOY](https://github.com/markupp-labs/markupp/blob/main/docs/DEPLOY.md)
 
 ## Funcionalidades
 
-- Comando "Subir nota ativa" e ícone na ribbon que enviam a nota Markdown atual via `POST /notes`
-- Tela de configuração (Settings → Markupp Plugin) para definir a URL do servidor
-
-## Configuração
-
-Após instalar, abra **Settings → Markupp Plugin** e ajuste a **URL do servidor** (default: `http://localhost:8080`).
+- Source control view na barra lateral, com o estado de cada nota em relação ao servidor
+- Comandos **Fetch**, **Pull**, **Push** e **Sync**, com detecção de conflito e sobrescrita forçada
+- Tela de configuração (Settings → Markupp) para definir a URL do servidor
 
 ## Desenvolvimento
 
@@ -43,10 +48,16 @@ src/
 ├── api/
 │   ├── client.ts          # Cliente HTTP do servidor Markupp
 │   └── client.test.ts
-├── commands/
-│   └── upload-active-note.ts
-├── __mocks__/
-│   └── obsidian.ts        # Stubs do módulo `obsidian` para testes
+├── core/
+│   ├── operations.ts      # Fetch, pull, push e sync
+│   └── status.ts          # Estado da nota em relação ao servidor
+├── storage/
+│   └── note-index.ts      # Índice local das notas sincronizadas
+├── ui/
+│   ├── notify.ts          # Notices do Obsidian
+│   └── sourceControl/
+│       └── view.ts        # Source control view
+├── __mocks__/             # Stubs do módulo `obsidian` para testes
 ├── main.ts                # Entrypoint do plugin
 └── settings.ts            # Aba de settings
 ```
@@ -57,4 +68,8 @@ src/
 npm run build
 ```
 
-Gera `main.js` na raiz do plugin. Para distribuição, junte com `manifest.json` e `styles.css`.
+Gera os arquivos em `build/`. Para distribuição, junte `main.js`, `manifest.json` e `styles.css`. O workflow `.github/workflows/release.yml` faz isso e anexa o zip a cada release publicada.
+
+## Licença
+
+MIT. Ver [LICENSE](LICENSE) e [ADR-0001](docs/adrs/ADR-0001-licenca-mit.md).
